@@ -33,6 +33,37 @@ SEMAPHORE_LIMIT = int(os.getenv('SEMAPHORE_LIMIT', 20))
 MAX_REFLEXION_ITERATIONS = int(os.getenv('MAX_REFLEXION_ITERATIONS', 0))
 DEFAULT_PAGE_LIMIT = 20
 
+# Determine the graph database backend. Default to Neo4j but allow Memgraph.
+GRAPH_DB = os.getenv('GRAPH_DB', 'neo4j').lower()
+
+# Backend specific configuration for features such as fulltext and vector search.
+if GRAPH_DB == 'memgraph':
+    # Memgraph exposes similar procedures but under different namespaces.
+    COSINE_SIMILARITY_FUNC = 'similarity.cosine'
+    NODE_FULLTEXT_SEARCH = 'CALL db.index.fulltext.searchNodes'
+    REL_FULLTEXT_SEARCH = 'CALL db.index.fulltext.searchRelationships'
+    FULLTEXT_INDEX_TEMPLATES = [
+        """CREATE FULLTEXT INDEX episode_content IF NOT EXISTS FOR (e:Episodic) ON (e.content, e.source, e.source_description, e.group_id)""",
+        """CREATE FULLTEXT INDEX node_name_and_summary IF NOT EXISTS FOR (n:Entity) ON (n.name, n.summary, n.group_id)""",
+        """CREATE FULLTEXT INDEX community_name IF NOT EXISTS FOR (n:Community) ON (n.name, n.group_id)""",
+        """CREATE FULLTEXT INDEX edge_name_and_fact IF NOT EXISTS FOR ()-[e:RELATES_TO]-() ON (e.name, e.fact, e.group_id)""",
+    ]
+else:
+    # Neo4j default implementation
+    COSINE_SIMILARITY_FUNC = 'vector.similarity.cosine'
+    NODE_FULLTEXT_SEARCH = 'CALL db.index.fulltext.queryNodes'
+    REL_FULLTEXT_SEARCH = 'CALL db.index.fulltext.queryRelationships'
+    FULLTEXT_INDEX_TEMPLATES = [
+        """CREATE FULLTEXT INDEX episode_content IF NOT EXISTS
+        FOR (e:Episodic) ON EACH [e.content, e.source, e.source_description, e.group_id]""",
+        """CREATE FULLTEXT INDEX node_name_and_summary IF NOT EXISTS
+        FOR (n:Entity) ON EACH [n.name, n.summary, n.group_id]""",
+        """CREATE FULLTEXT INDEX community_name IF NOT EXISTS
+        FOR (n:Community) ON EACH [n.name, n.group_id]""",
+        """CREATE FULLTEXT INDEX edge_name_and_fact IF NOT EXISTS
+        FOR ()-[e:RELATES_TO]-() ON EACH [e.name, e.fact, e.group_id]""",
+    ]
+
 RUNTIME_QUERY: LiteralString = (
     'CYPHER runtime = parallel parallelRuntimeSupport=all\n' if USE_PARALLEL_RUNTIME else ''
 )

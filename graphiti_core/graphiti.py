@@ -104,17 +104,17 @@ class Graphiti:
         """
         Initialize a Graphiti instance.
 
-        This constructor sets up a connection to the Neo4j database and initializes
+        This constructor sets up a connection to the Neo4j or Memgraph database and initializes
         the LLM client for natural language processing tasks.
 
         Parameters
         ----------
         uri : str
-            The URI of the Neo4j database.
+            The Bolt URI of the graph database.
         user : str
-            The username for authenticating with the Neo4j database.
+            The username for authenticating with the database.
         password : str
-            The password for authenticating with the Neo4j database.
+            The password for authenticating with the database.
         llm_client : LLMClient | None, optional
             An instance of LLMClient for natural language processing tasks.
             If not provided, a default OpenAIClient will be initialized.
@@ -125,7 +125,7 @@ class Graphiti:
 
         Notes
         -----
-        This method establishes a connection to the Neo4j database using the provided
+        This method establishes a connection to the graph database using the provided
         credentials. It also sets up the LLM client, either using the provided client
         or by creating a default OpenAIClient.
 
@@ -162,9 +162,9 @@ class Graphiti:
 
     async def close(self):
         """
-        Close the connection to the Neo4j database.
+        Close the connection to the graph database.
 
-        This method safely closes the driver connection to the Neo4j database.
+        This method safely closes the driver connection to the database.
         It should be called when the Graphiti instance is no longer needed or
         when the application is shutting down.
 
@@ -194,9 +194,9 @@ class Graphiti:
 
     async def build_indices_and_constraints(self, delete_existing: bool = False):
         """
-        Build indices and constraints in the Neo4j database.
+        Build indices and constraints in the graph database.
 
-        This method sets up the necessary indices and constraints in the Neo4j database
+        This method sets up the necessary indices and constraints in the database
         to optimize query performance and ensure data integrity for the knowledge graph.
 
         Parameters
