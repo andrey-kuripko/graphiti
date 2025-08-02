@@ -31,6 +31,9 @@ from graphiti_core.helpers import (
     lucene_sanitize,
     normalize_l2,
     semaphore_gather,
+    COSINE_SIMILARITY_FUNC,
+    NODE_FULLTEXT_SEARCH,
+    REL_FULLTEXT_SEARCH,
 )
 from graphiti_core.nodes import (
     ENTITY_NODE_RETURN,
@@ -156,13 +159,13 @@ async def edge_fulltext_search(
     filter_query, filter_params = edge_search_filter_query_constructor(search_filter)
 
     cypher_query = Query(
-        """
-              CALL db.index.fulltext.queryRelationships("edge_name_and_fact", $query, {limit: $limit}) 
+        f"""
+              {REL_FULLTEXT_SEARCH}("edge_name_and_fact", $query, {{limit: $limit}})
               YIELD relationship AS rel, score
               MATCH (:Entity)-[r:RELATES_TO]->(:Entity)
               WHERE r.group_id IN $group_ids"""
         + filter_query
-        + """\nWITH r, score, startNode(r) AS n, endNode(r) AS m
+        + f"""\nWITH r, score, startNode(r) AS n, endNode(r) AS m
                RETURN
                      r.uuid AS uuid,
                      r.group_id AS group_id,
@@ -231,7 +234,7 @@ async def edge_similarity_search(
                                                                                                                                                """
         + group_filter_query
         + filter_query
-        + """\nWITH DISTINCT r, vector.similarity.cosine(r.fact_embedding, $search_vector) AS score
+        + f"""\nWITH DISTINCT r, {COSINE_SIMILARITY_FUNC}(r.fact_embedding, $search_vector) AS score
                 WHERE score > $min_score
                 RETURN
                     r.uuid AS uuid,
@@ -339,8 +342,8 @@ async def node_fulltext_search(
     filter_query, filter_params = node_search_filter_query_constructor(search_filter)
 
     query = (
-        """
-                                                                                        CALL db.index.fulltext.queryNodes("node_name_and_summary", $query, {limit: $limit}) 
+        f"""
+                                                                                        {NODE_FULLTEXT_SEARCH}("node_name_and_summary", $query, {{limit: $limit}})
                                                                                         YIELD node AS n, score
                                                                                         WHERE n:Entity
                                                                                         """
@@ -391,8 +394,8 @@ async def node_similarity_search(
             """
         + group_filter_query
         + filter_query
-        + """
-            WITH n, vector.similarity.cosine(n.name_embedding, $search_vector) AS score
+        + f"""
+            WITH n, {COSINE_SIMILARITY_FUNC}(n.name_embedding, $search_vector) AS score
             WHERE score > $min_score"""
         + ENTITY_NODE_RETURN
         + """
@@ -461,12 +464,12 @@ async def episode_fulltext_search(
         return []
 
     records, _, _ = await driver.execute_query(
-        """
-        CALL db.index.fulltext.queryNodes("episode_content", $query, {limit: $limit}) 
+        f"""
+        {NODE_FULLTEXT_SEARCH}("episode_content", $query, {{limit: $limit}})
         YIELD node AS episode, score
         MATCH (e:Episodic)
         WHERE e.uuid = episode.uuid
-        RETURN 
+        RETURN
             e.content AS content,
             e.created_at AS created_at,
             e.valid_at AS valid_at,
@@ -502,13 +505,13 @@ async def community_fulltext_search(
         return []
 
     records, _, _ = await driver.execute_query(
-        """
-        CALL db.index.fulltext.queryNodes("community_name", $query, {limit: $limit}) 
+        f"""
+        {NODE_FULLTEXT_SEARCH}("community_name", $query, {{limit: $limit}})
         YIELD node AS comm, score
         RETURN
             comm.uuid AS uuid,
-            comm.group_id AS group_id, 
-            comm.name AS name, 
+            comm.group_id AS group_id,
+            comm.name AS name,
             comm.created_at AS created_at, 
             comm.summary AS summary
         ORDER BY score DESC
@@ -546,8 +549,8 @@ async def community_similarity_search(
            MATCH (comm:Community)
            """
         + group_filter_query
-        + """
-           WITH comm, vector.similarity.cosine(comm.name_embedding, $search_vector) AS score
+        + f"""
+           WITH comm, {COSINE_SIMILARITY_FUNC}(comm.name_embedding, $search_vector) AS score
            WHERE score > $min_score
            RETURN
                comm.uuid As uuid,
@@ -668,12 +671,12 @@ async def get_relevant_nodes(
     MATCH (n:Entity {group_id: $group_id})
             """
         + filter_query
-        + """
-        WITH node, n, vector.similarity.cosine(n.name_embedding, node.name_embedding) AS score
+        + f"""
+        WITH node, n, {COSINE_SIMILARITY_FUNC}(n.name_embedding, node.name_embedding) AS score
         WHERE score > $min_score
         WITH node, collect(n)[..$limit] AS top_vector_nodes, collect(n.uuid) AS vector_node_uuids
-        
-        CALL db.index.fulltext.queryNodes("node_name_and_summary", node.fulltext_query, {limit: $limit}) 
+
+        {NODE_FULLTEXT_SEARCH}("node_name_and_summary", node.fulltext_query, {{limit: $limit}})
         YIELD node AS m
         WHERE m.group_id = $group_id
         WITH node, top_vector_nodes, vector_node_uuids, collect(m) AS fulltext_nodes
@@ -756,8 +759,8 @@ async def get_relevant_edges(
     MATCH (n:Entity {uuid: edge.source_node_uuid})-[e:RELATES_TO {group_id: edge.group_id}]-(m:Entity {uuid: edge.target_node_uuid})
             """
         + filter_query
-        + """
-            WITH e, edge, vector.similarity.cosine(e.fact_embedding, edge.fact_embedding) AS score
+        + f"""
+            WITH e, edge, {COSINE_SIMILARITY_FUNC}(e.fact_embedding, edge.fact_embedding) AS score
             WHERE score > $min_score
             WITH edge, e, score
             ORDER BY score DESC
@@ -823,8 +826,8 @@ async def get_edge_invalidation_candidates(
     WHERE n.uuid IN [edge.source_node_uuid, edge.target_node_uuid] OR m.uuid IN [edge.target_node_uuid, edge.source_node_uuid]
             """
         + filter_query
-        + """
-            WITH edge, e, vector.similarity.cosine(e.fact_embedding, edge.fact_embedding) AS score
+        + f"""
+            WITH edge, e, {COSINE_SIMILARITY_FUNC}(e.fact_embedding, edge.fact_embedding) AS score
             WHERE score > $min_score
             WITH edge, e, score
             ORDER BY score DESC

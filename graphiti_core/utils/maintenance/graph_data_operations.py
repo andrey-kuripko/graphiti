@@ -20,7 +20,11 @@ from datetime import datetime, timezone
 from neo4j import AsyncDriver
 from typing_extensions import LiteralString
 
-from graphiti_core.helpers import DEFAULT_DATABASE, semaphore_gather
+from graphiti_core.helpers import (
+    DEFAULT_DATABASE,
+    FULLTEXT_INDEX_TEMPLATES,
+    semaphore_gather,
+)
 from graphiti_core.nodes import EpisodeType, EpisodicNode
 
 EPISODE_WINDOW_LEN = 3
@@ -70,18 +74,7 @@ async def build_indices_and_constraints(driver: AsyncDriver, delete_existing: bo
         'CREATE INDEX invalid_at_edge_index IF NOT EXISTS FOR ()-[e:RELATES_TO]-() ON (e.invalid_at)',
     ]
 
-    fulltext_indices: list[LiteralString] = [
-        """CREATE FULLTEXT INDEX episode_content IF NOT EXISTS 
-        FOR (e:Episodic) ON EACH [e.content, e.source, e.source_description, e.group_id]""",
-        """CREATE FULLTEXT INDEX node_name_and_summary IF NOT EXISTS 
-        FOR (n:Entity) ON EACH [n.name, n.summary, n.group_id]""",
-        """CREATE FULLTEXT INDEX community_name IF NOT EXISTS 
-        FOR (n:Community) ON EACH [n.name, n.group_id]""",
-        """CREATE FULLTEXT INDEX edge_name_and_fact IF NOT EXISTS 
-        FOR ()-[e:RELATES_TO]-() ON EACH [e.name, e.fact, e.group_id]""",
-    ]
-
-    index_queries: list[LiteralString] = range_indices + fulltext_indices
+    index_queries: list[LiteralString] = range_indices + FULLTEXT_INDEX_TEMPLATES
 
     await semaphore_gather(
         *[
@@ -123,7 +116,7 @@ async def retrieve_episodes(
     Retrieve the last n episodic nodes from the graph.
 
     Args:
-        driver (AsyncDriver): The Neo4j driver instance.
+        driver (AsyncDriver): The graph database driver instance.
         reference_time (datetime): The reference time to filter episodes. Only episodes with a valid_at timestamp
                                    less than or equal to this reference_time will be retrieved. This allows for
                                    querying the graph's state at a specific point in time.
